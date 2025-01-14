@@ -24,7 +24,8 @@ To run tests
 Server connects to kraken exchange websocket to listen for crypto rate updates in realtime.
 It proxies all updates to all clients that are subscribed to rates.
 
-```ws://localhost:8080/ws``` local proxy endoint
+```ws://localhost:8080/ws``` local proxy endoint.
+
 ```{"event":"subscribe","channel":"rates"}``` message to subscribe client to rates
 
 
@@ -34,3 +35,4 @@ It proxies all updates to all clients that are subscribed to rates.
 - Ping pong implementation to keep track active clients
 - Binary communication with client for "lighter" payloads
 - Integration tests
+- Load test benchmarks with thousands active clients
