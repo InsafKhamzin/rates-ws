@@ -11,6 +11,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// events
+const (
+	subscribeEvent    = "subscribe"
+	subscribedEvent   = "subscribed"
+	unsubscribeEvent  = "unsubscribe"
+	unsubscribedEvent = "unsubscribed"
+	dataEvent         = "data"
+)
+
 var (
 	channelNames = []string{"rates"}
 )
@@ -92,22 +101,22 @@ func (c *ClientHub) ProcessMessage(conn *websocket.Conn, clientID string, msg []
 
 	event := strings.TrimSpace(strings.ToLower(m.Event))
 	switch event {
-	case "subscribe":
+	case subscribeEvent:
 		err := c.Subscribe(conn, clientID, m.Channel)
 		if err != nil {
 			c.SendError(conn, err.Error())
 			break
 		}
-		c.SendJson(conn, SocketMessageBase{Event: "subscribed", Channel: m.Channel})
+		c.SendJson(conn, SocketMessageBase{Event: subscribedEvent, Channel: m.Channel})
 		log.Printf("Client %s subscribed to %s", clientID, m.Channel)
 
-	case "unsubscribe":
+	case unsubscribeEvent:
 		err := c.Unsubscribe(clientID, m.Channel)
 		if err != nil {
 			c.SendError(conn, err.Error())
 			break
 		}
-		c.SendJson(conn, SocketMessageBase{Event: "unsubscribed", Channel: m.Channel})
+		c.SendJson(conn, SocketMessageBase{Event: unsubscribedEvent, Channel: m.Channel})
 		log.Printf("Client %s unsubscribed from %s", clientID, m.Channel)
 
 	default:
@@ -130,7 +139,7 @@ func (c *ClientHub) Publish(channelName string, data any) {
 	response := Response{
 		SocketMessageBase: SocketMessageBase{
 			Channel: channelName,
-			Event:   "data",
+			Event:   dataEvent,
 		},
 		Data: data,
 	}

@@ -2,12 +2,11 @@ package exchange
 
 import (
 	"context"
+	"crypto-ws/pkg/socket"
 	"encoding/json"
 	"fmt"
 	"log"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
 // TODO put into env var
@@ -28,23 +27,23 @@ type Exchange interface {
 }
 
 type KrakenExchange struct {
-	Url string
+	Client socket.SocketClient
 }
 
-func NewKrakenExchange() Exchange {
+func NewKrakenExchange(client socket.SocketClient) Exchange {
 	return &KrakenExchange{
-		Url: "wss://ws.kraken.com/v2",
+		Client: client,
 	}
 }
 
 // ListenRatesUpdates connects to kraken websocket updates to listen for rates realtime with retry mechanism
 func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, notifyClients func(channelName string, data any)) error {
 	for {
-		conn, err := connectToWebSocket(ctx, e.Url)
+		err := e.Client.Connect(ctx)
 		if err != nil {
 			return fmt.Errorf("error connecting to Kraken WebSocket: %s", err)
 		}
-		defer conn.Close()
+		defer e.Client.Close()
 
 		// subscribe to ticker data for BTC/USD
 		subscribeMessage := KrakenSocketMessage{
@@ -54,7 +53,7 @@ func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, notifyClients f
 				Symbol:  tickers,
 			},
 		}
-		err = conn.WriteJSON(subscribeMessage)
+		err = e.Client.WriteJson(subscribeMessage)
 		if err != nil {
 			return fmt.Errorf("error subscribing to Kraken WebSocket: %s", err)
 		}
@@ -66,7 +65,7 @@ func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, notifyClients f
 				log.Println("cancelation received. closing exchange connection")
 				return nil
 			default:
-				_, message, err := conn.ReadMessage()
+				message, err := e.Client.ReadMessage()
 				if err != nil {
 					log.Printf("error reading from Kraken WebSocket: %s", err)
 					//breaking to outer loop to reconnect
@@ -93,35 +92,6 @@ func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, notifyClients f
 					}
 				}
 			}
-		}
-	}
-}
-
-// connectToWebSocket connects to exchange websocket with exponential backoff retries
-func connectToWebSocket(ctx context.Context, url string) (*websocket.Conn, error) {
-	var conn *websocket.Conn
-	var err error
-	backoffInterval := 2 * time.Second // backoff interval
-	maxBackoff := 30 * time.Second     // max backoff interval
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("connection attempt canceled: %v", ctx.Err())
-		default:
-			conn, _, err = websocket.DefaultDialer.DialContext(ctx, url, nil)
-			if err == nil {
-				log.Printf("Successfully connected to %s. Listening...", url)
-				return conn, nil
-			}
-
-			log.Printf("Failed to connect to WebSocket, retrying in %v: %v", backoffInterval, err)
-
-			// exponential backoff
-			if backoffInterval < maxBackoff {
-				backoffInterval *= 2
-			}
-			time.Sleep(backoffInterval)
 		}
 	}
 }

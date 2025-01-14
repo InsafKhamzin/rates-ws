@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto-ws/internal/websocket"
 	"crypto-ws/pkg/exchange"
+	"crypto-ws/pkg/socket"
 	"log"
 	"net/http"
 	"os"
@@ -33,7 +34,8 @@ func main() {
 	websocketHandler := websocket.NewWebsocketHandler(hub)
 	http.HandleFunc("/ws", websocketHandler.HandleWS)
 
-	exchange := exchange.NewKrakenExchange()
+	socketClient := socket.NewSocketClient("wss://ws.kraken.com/v2")
+	exchange := exchange.NewKrakenExchange(socketClient)
 	// goroutine to listen for rate updates
 	go func() {
 		if err := exchange.ListenRatesUpdates(ctx, hub.Publish); err != nil {
