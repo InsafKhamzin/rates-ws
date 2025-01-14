@@ -3,6 +3,7 @@ package websocket
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"slices"
 	"strings"
 	"sync"
@@ -69,15 +70,15 @@ func (c *ClientHub) RemoveClient(clientID string) {
 	}
 }
 
-// Send sends message to client
-func (s *ClientHub) Send(conn *websocket.Conn, message []byte) {
-	conn.WriteMessage(websocket.TextMessage, message)
-}
-
 // Send sends error message
 func (s *ClientHub) SendError(conn *websocket.Conn, errorMsg string) {
 	response := ErrorResponse{ErrorMessage: errorMsg}
 	conn.WriteJSON(response)
+}
+
+// Send sends json
+func (s *ClientHub) SendJson(conn *websocket.Conn, data any) {
+	conn.WriteJSON(data)
 }
 
 // ProcessMessage handle messages from client
@@ -96,6 +97,7 @@ func (c *ClientHub) ProcessMessage(conn *websocket.Conn, clientID string, msg []
 		if err != nil {
 			c.SendError(conn, err.Error())
 		}
+		c.SendJson(conn, SocketMessageBase{Event: "subscribed", Channel: m.Channel})
 	case "unsubscribe":
 		c.Unsubscribe(clientID, m.Channel)
 	default:
@@ -110,7 +112,12 @@ func (c *ClientHub) Publish(channelName string, data any) {
 		return
 	}
 
-	msg := Response{
+	//if not clients subscribed
+	if len(channel) == 0 {
+		return
+	}
+
+	response := Response{
 		SocketMessageBase: SocketMessageBase{
 			Channel: channelName,
 			Event:   "data",
@@ -118,13 +125,20 @@ func (c *ClientHub) Publish(channelName string, data any) {
 		Data: data,
 	}
 
-	c.Subscriptions.Locks[channelName].Lock()
+	msg, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("error while marshling to json: %s", err)
+	}
+
+	lock := c.Subscriptions.Locks[channelName]
+	lock.Lock()
+	defer lock.Unlock()
+
 	for clientID, conn := range channel {
-		err := conn.WriteJSON(msg)
-		//removind client if failed to write
+		err := conn.WriteMessage(websocket.TextMessage, msg)
+		//removing client if failed to write
 		if err != nil {
 			c.RemoveClient(clientID)
 		}
 	}
-	c.Subscriptions.Locks[channelName].Unlock()
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto-ws/internal/websocket"
 	"crypto-ws/pkg/exchange"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -19,35 +18,46 @@ func main() {
 		Addr: ":8080",
 	}
 
-	// Goroutine to start the server
+	// goroutine to start the server
 	go func() {
-		fmt.Println("Starting server on :8080")
+		log.Println("Starting server on :8080")
 		err := server.ListenAndServe()
-		if err != nil {
+		if err != nil && err != http.ErrServerClosed {
 			log.Fatal("Error starting server:", err)
 		}
 	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
 
 	hub := websocket.NewClientHub()
 	websocketHandler := websocket.NewWebsocketHandler(hub)
 	http.HandleFunc("/ws", websocketHandler.HandleWS)
 
 	exchange := exchange.NewKrakenExchange()
-	go exchange.Subscribe(hub.Publish)
+	// goroutine to listen for rate updates
+	go func() {
+		if err := exchange.ListenRatesUpdates(ctx, hub.Publish); err != nil {
+			log.Printf("Error listening for rate updates: %v", err)
+		}
+	}()
 
-	// Channel to listen for OS signals
+	// channel to listen for OS signals
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM) // Listen for SIGINT, SIGTERM
 
 	<-stop
+	log.Println("Shutdown signal received, shutting down gracefully...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	//canceling context to release rate updates
+	cancel()
 
-	// Attempt a graceful shutdown
-	if err := server.Shutdown(ctx); err != nil {
-		fmt.Printf("Server forced to shutdown: %v", err)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	// attempt a graceful shutdown
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server forced to shutdown: %v\n", err)
 	}
 
-	fmt.Println("\nShutting down server...")
+	log.Println("Server shut down successfully.")
 }
