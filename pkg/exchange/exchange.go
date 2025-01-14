@@ -58,8 +58,9 @@ func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, notifyClients f
 			return fmt.Errorf("error subscribing to Kraken WebSocket: %s", err)
 		}
 
+		reconnect := false
 		// listen for messages from Kraken
-		for {
+		for !reconnect {
 			select {
 			case <-ctx.Done():
 				log.Println("cancelation received. closing exchange connection")
@@ -69,6 +70,7 @@ func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, notifyClients f
 				if err != nil {
 					log.Printf("error reading from Kraken WebSocket: %s", err)
 					//breaking to outer loop to reconnect
+					reconnect = true
 					break
 				}
 
