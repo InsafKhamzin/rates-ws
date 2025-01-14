@@ -96,10 +96,20 @@ func (c *ClientHub) ProcessMessage(conn *websocket.Conn, clientID string, msg []
 		err := c.Subscribe(conn, clientID, m.Channel)
 		if err != nil {
 			c.SendError(conn, err.Error())
+			break
 		}
 		c.SendJson(conn, SocketMessageBase{Event: "subscribed", Channel: m.Channel})
+		log.Printf("Client %s subscribed to %s", clientID, m.Channel)
+
 	case "unsubscribe":
-		c.Unsubscribe(clientID, m.Channel)
+		err := c.Unsubscribe(clientID, m.Channel)
+		if err != nil {
+			c.SendError(conn, err.Error())
+			break
+		}
+		c.SendJson(conn, SocketMessageBase{Event: "unsubscribed", Channel: m.Channel})
+		log.Printf("Client %s unsubscribed from %s", clientID, m.Channel)
+
 	default:
 		c.SendError(conn, "unsuported event")
 	}
