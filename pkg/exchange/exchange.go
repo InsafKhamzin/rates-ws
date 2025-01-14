@@ -74,7 +74,7 @@ func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, notifyClients f
 
 				var krakenResponse KrakenUpdate
 				if err := json.Unmarshal(message, &krakenResponse); err != nil {
-					log.Println("invalid msg")
+					log.Printf("invalid msg: %s", err)
 					continue
 				}
 				if krakenResponse.Channel == "ticker" {

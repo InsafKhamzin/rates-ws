@@ -22,7 +22,7 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  readBufferSize,
 	WriteBufferSize: writeBufferSize,
 	CheckOrigin: func(r *http.Request) bool {
-		// allow all origin
+		// allow all origin TODO has to allow only one origin on prod
 		return true
 	},
 }

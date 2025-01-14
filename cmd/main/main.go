@@ -36,7 +36,7 @@ func main() {
 
 	socketClient := socket.NewSocketClient("wss://ws.kraken.com/v2")
 	exchange := exchange.NewKrakenExchange(socketClient)
-	// goroutine to listen for rate updates
+	// goroutine to listen for rate updates in the background
 	go func() {
 		if err := exchange.ListenRatesUpdates(ctx, hub.Publish); err != nil {
 			log.Printf("Error listening for rate updates: %v", err)

@@ -77,6 +77,7 @@ func (c *ClientHub) RemoveClient(clientID string) {
 	for _, channel := range c.Subscriptions.Channels {
 		delete(channel, clientID)
 	}
+	log.Printf("Client %s disconnected", clientID)
 }
 
 // Send sends error message

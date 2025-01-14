@@ -28,6 +28,7 @@ func NewSocketClient(url string) SocketClient {
 	}
 }
 
+// Connect connects to websocket with retry logic
 func (sc *SocketClientDefalut) Connect(ctx context.Context) error {
 	backoffInterval := 2 * time.Second // backoff interval
 	maxBackoff := 30 * time.Second     // max backoff interval
