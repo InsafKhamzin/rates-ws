@@ -20,6 +20,13 @@ To run tests
   make test
 ```
 
+To run stress test
+
+```
+artillery run artillery-test.yaml
+```
+Stress test creates 5000 client connections, subscribes each to rates channel and waits for 2min
+
 ### Decription 
 Server connects to kraken exchange websocket to listen for crypto rate updates in realtime.
 It proxies all updates to all clients that are subscribed to rates.

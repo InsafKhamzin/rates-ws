@@ -26,8 +26,8 @@ type ErrorResponse struct {
 	ErrorMessage string `json:"error_message"`
 }
 
-// Response is response message with all rates
-type Response struct {
+// SocketMessageWithData is response message with all rates
+type SocketMessageWithData struct {
 	SocketMessageBase
 	Data any `json:"data"`
 }

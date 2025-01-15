@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"context"
+	"crypto-ws/internal/websocket"
 	"crypto-ws/pkg/socket"
 	"encoding/json"
 	"fmt"
@@ -23,7 +24,7 @@ var tickers = []string{
 }
 
 type Exchange interface {
-	ListenRatesUpdates(ctx context.Context, publish func(channelName string, data any)) error
+	ListenRatesUpdates(ctx context.Context, broadcast chan<- websocket.SocketMessageWithData) error
 }
 
 type KrakenExchange struct {
@@ -37,7 +38,7 @@ func NewKrakenExchange(client socket.SocketClient) Exchange {
 }
 
 // ListenRatesUpdates connects to kraken websocket updates to listen for rates realtime with retry mechanism
-func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, notifyClients func(channelName string, data any)) error {
+func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, broadcast chan<- websocket.SocketMessageWithData) error {
 	for {
 		err := e.Client.Connect(ctx)
 		if err != nil {
@@ -69,6 +70,7 @@ func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, notifyClients f
 				message, err := e.Client.ReadMessage()
 				if err != nil {
 					log.Printf("error reading from Kraken WebSocket: %s", err)
+					e.Client.Close()
 					//breaking to outer loop to reconnect
 					reconnect = true
 					break
@@ -89,8 +91,16 @@ func (e *KrakenExchange) ListenRatesUpdates(ctx context.Context, notifyClients f
 							Change:    kr.ChangePct,
 							Timestamp: time.Now().Unix(),
 						}
-						//firing goroutine worker to notify clients
-						go notifyClients("rates", clientResponse)
+
+						response := websocket.SocketMessageWithData{
+							Data: clientResponse,
+							SocketMessageBase: websocket.SocketMessageBase{
+								Event:   "data",
+								Channel: "rates",
+							},
+						}
+						//communicating rate to subscribers
+						broadcast <- response
 					}
 				}
 			}

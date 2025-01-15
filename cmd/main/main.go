@@ -11,6 +11,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	_ "net/http/pprof" // Import pprof
 )
 
 func main() {
@@ -34,14 +36,20 @@ func main() {
 	websocketHandler := websocket.NewWebsocketHandler(hub)
 	http.HandleFunc("/ws", websocketHandler.HandleWS)
 
+	//broadcasting channel for communicating rates
+	broadcast := make(chan websocket.SocketMessageWithData, 100)
+
 	socketClient := socket.NewSocketClient("wss://ws.kraken.com/v2")
 	exchange := exchange.NewKrakenExchange(socketClient)
 	// goroutine to listen for rate updates in the background
 	go func() {
-		if err := exchange.ListenRatesUpdates(ctx, hub.Publish); err != nil {
+		if err := exchange.ListenRatesUpdates(ctx, broadcast); err != nil {
 			log.Printf("Error listening for rate updates: %v", err)
 		}
 	}()
+
+	//gorouting for broadcasting rates to clients
+	go hub.Broadcast(ctx, broadcast)
 
 	// channel to listen for OS signals
 	stop := make(chan os.Signal, 1)

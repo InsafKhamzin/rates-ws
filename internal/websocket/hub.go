@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -74,8 +75,10 @@ func (c *ClientHub) Unsubscribe(clientID string, channelName string) error {
 
 // RemoveClient removes the clients from the server subscription map
 func (c *ClientHub) RemoveClient(clientID string) {
-	for _, channel := range c.Subscriptions.Channels {
+	for channelName, channel := range c.Subscriptions.Channels {
+		c.Subscriptions.Locks[channelName].Lock()
 		delete(channel, clientID)
+		c.Subscriptions.Locks[channelName].Unlock()
 	}
 	log.Printf("Client %s disconnected", clientID)
 }
@@ -125,40 +128,65 @@ func (c *ClientHub) ProcessMessage(conn *websocket.Conn, clientID string, msg []
 	}
 }
 
-// Publish sends a message to all subscribing clients of a topic
-func (c *ClientHub) Publish(channelName string, data any) {
-	channel, ok := c.Subscriptions.Channels[channelName]
-	if !ok {
-		return
-	}
+// Broadcast broadcasting messages to clients
+func (c *ClientHub) Broadcast(ctx context.Context, broadcast <-chan SocketMessageWithData) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Broadcast received cancellation signal.")
+			return
+		case message, ok := <-broadcast:
+			if !ok {
+				log.Println("Broadcast channel closed.")
+				return
+			}
+			channel, ok := c.Subscriptions.Channels[message.Channel]
+			if !ok {
+				continue
+			}
 
-	//if not clients subscribed
-	if len(channel) == 0 {
-		return
-	}
+			//if no clients subscribed
+			if len(channel) == 0 {
+				continue
+			}
 
-	response := Response{
-		SocketMessageBase: SocketMessageBase{
-			Channel: channelName,
-			Event:   dataEvent,
-		},
-		Data: data,
-	}
+			msgRaw, err := json.Marshal(message)
+			if err != nil {
+				log.Printf("error while marshling to json: %s", err)
+				continue
+			}
 
-	msg, err := json.Marshal(response)
-	if err != nil {
-		log.Printf("error while marshling to json: %s", err)
-	}
+			// collect failed clients
+			var failedClients []string
+			var connsToNotify []struct {
+				ID   string
+				Conn *websocket.Conn
+			}
 
-	lock := c.Subscriptions.Locks[channelName]
-	lock.Lock()
-	defer lock.Unlock()
+			lock := c.Subscriptions.Locks[message.Channel]
+			lock.Lock()
+			for clientID, conn := range channel {
+				connsToNotify = append(connsToNotify, struct {
+					ID   string
+					Conn *websocket.Conn
+				}{ID: clientID, Conn: conn})
+			}
+			lock.Unlock()
 
-	for clientID, conn := range channel {
-		err := conn.WriteMessage(websocket.TextMessage, msg)
-		//removing client if failed to write
-		if err != nil {
-			c.RemoveClient(clientID)
+			for _, client := range connsToNotify {
+				err := client.Conn.WriteMessage(websocket.TextMessage, msgRaw)
+				if err != nil {
+					//record client that are failed to receive. meaning they are inactive.
+					failedClients = append(failedClients, client.ID)
+				}
+			}
+
+			// remove failed clients
+			lock.Lock()
+			for _, clientID := range failedClients {
+				delete(channel, clientID)
+			}
+			lock.Unlock()
 		}
 	}
 }

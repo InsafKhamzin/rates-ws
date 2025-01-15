@@ -1,0 +1,11 @@
+config:
+  target: 'ws://localhost:8080/ws'
+  phases:
+    - duration: 20
+      arrivalRate: 250
+
+scenarios:
+  - engine: 'ws'
+    flow:
+      - send: '{"event":"subscribe","channel":"rates"}'
+      - think: 120

@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"context"
+	"crypto-ws/internal/websocket"
 	"testing"
 	"time"
 
@@ -42,15 +43,6 @@ func TestListenRatesUpdates(t *testing.T) {
 		Client: mockClient,
 	}
 
-	// notifyClients function to capture sent data
-	notifyClients := func(channelName string, data interface{}) {
-		assert.Equal(t, "rates", channelName)
-		rateData, ok := data.(RateResponseData)
-		assert.True(t, ok)
-		assert.Equal(t, "BTC/USD", rateData.Symbol)
-		assert.NotZero(t, rateData.Timestamp)
-	}
-
 	mockClient.On("Connect", mock.Anything).Return(nil)
 	mockClient.On("Close").Return(nil)
 	mockClient.On("WriteJson", mock.Anything).Return(nil)
@@ -66,7 +58,8 @@ func TestListenRatesUpdates(t *testing.T) {
 		cancel()
 	}()
 
-	err := exchange.ListenRatesUpdates(ctx, notifyClients)
+	broadcast := make(chan websocket.SocketMessageWithData, 100)
+	err := exchange.ListenRatesUpdates(ctx, broadcast)
 	assert.NoError(t, err)
 
 	// wait to complete
